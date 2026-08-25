@@ -1,162 +1,204 @@
 import express from 'express'
-import { getDb } from '../config/database.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 
 const router = express.Router()
-const db = getDb()
+
+// In-memory storage for pickups
+let pickups = [
+  {
+    id: 1,
+    facility: 'City Hospital',
+    facilityId: 1,
+    priority: 'high',
+    status: 'assigned',
+    pickupDate: '2026-08-26',
+    pickupTime: '10:00 AM',
+    address: '123 Main Street, Mumbai',
+    instructions: 'Handle with care - contains sharps',
+    wasteType: 'Yellow, Red',
+    quantity: '5.2 kg',
+    collector: 'Ravi Kumar',
+    collectorId: 3,
+    createdAt: '2026-08-26T08:00:00.000Z',
+    updatedAt: '2026-08-26T08:30:00.000Z',
+    wasteRecords: [
+      { id: 101, category: 'Yellow', quantity: '3.2 kg' },
+      { id: 102, category: 'Red', quantity: '2.0 kg' }
+    ]
+  },
+  {
+    id: 2,
+    facility: 'City Hospital',
+    facilityId: 1,
+    priority: 'medium',
+    status: 'in_transit',
+    pickupDate: '2026-08-26',
+    pickupTime: '02:30 PM',
+    address: '123 Main Street, Mumbai',
+    instructions: 'Call before arrival',
+    wasteType: 'White',
+    quantity: '3.8 kg',
+    collector: 'Priya Singh',
+    collectorId: 4,
+    createdAt: '2026-08-26T07:30:00.000Z',
+    updatedAt: '2026-08-26T09:00:00.000Z',
+    wasteRecords: [
+      { id: 103, category: 'White', quantity: '3.8 kg' }
+    ]
+  },
+  {
+    id: 3,
+    facility: 'City Hospital',
+    facilityId: 1,
+    priority: 'urgent',
+    status: 'pending',
+    pickupDate: '2026-08-25',
+    pickupTime: '09:00 AM',
+    address: '123 Main Street, Mumbai',
+    instructions: 'URGENT - Lab closes at 5 PM',
+    wasteType: 'Blue, Red',
+    quantity: '2.1 kg',
+    collector: null,
+    collectorId: null,
+    createdAt: '2026-08-25T16:00:00.000Z',
+    updatedAt: '2026-08-25T16:00:00.000Z',
+    wasteRecords: [
+      { id: 104, category: 'Blue', quantity: '1.1 kg' },
+      { id: 105, category: 'Red', quantity: '1.0 kg' }
+    ]
+  },
+  {
+    id: 4,
+    facility: 'City Hospital',
+    facilityId: 1,
+    priority: 'low',
+    status: 'completed',
+    pickupDate: '2026-08-24',
+    pickupTime: '11:30 AM',
+    address: '123 Main Street, Mumbai',
+    instructions: 'Completed successfully',
+    wasteType: 'Yellow',
+    quantity: '8.5 kg',
+    collector: 'Amit Patel',
+    collectorId: 5,
+    createdAt: '2026-08-24T10:00:00.000Z',
+    updatedAt: '2026-08-24T12:00:00.000Z',
+    wasteRecords: [
+      { id: 106, category: 'Yellow', quantity: '8.5 kg' }
+    ]
+  },
+  {
+    id: 5,
+    facility: 'City Hospital',
+    facilityId: 1,
+    priority: 'high',
+    status: 'pending',
+    pickupDate: '2026-08-27',
+    pickupTime: '09:30 AM',
+    address: '123 Main Street, Mumbai',
+    instructions: 'New pickup request',
+    wasteType: 'Red, White',
+    quantity: '4.5 kg',
+    collector: null,
+    collectorId: null,
+    createdAt: '2026-08-26T11:00:00.000Z',
+    updatedAt: '2026-08-26T11:00:00.000Z',
+    wasteRecords: [
+      { id: 107, category: 'Red', quantity: '2.5 kg' },
+      { id: 108, category: 'White', quantity: '2.0 kg' }
+    ]
+  }
+]
+
+let nextId = 6
 
 // Get all pickups (filtered by role)
 router.get('/', authenticate, (req, res) => {
-  let query = `
-    SELECT pr.*, f.name as facility_name, u.name as user_name,
-      (SELECT name FROM users WHERE id = pa.collector_id) as collector_name,
-      pa.status as assignment_status
-    FROM pickup_requests pr
-    LEFT JOIN facilities f ON pr.facility_id = f.id
-    LEFT JOIN users u ON pr.user_id = u.id
-    LEFT JOIN pickup_assignments pa ON pr.id = pa.pickup_request_id
-  `
-  const params = []
-
-  // Filter by role
+  let filteredPickups = [...pickups]
+  
   if (req.user.role === 'staff') {
-    query += ' WHERE pr.facility_id = ?'
-    params.push(req.user.facility_id)
+    // Staff sees only their facility's pickups
+    filteredPickups = pickups.filter(p => p.facilityId === req.user.facility_id)
   } else if (req.user.role === 'collector') {
-    query += ' WHERE pa.collector_id = ? OR pr.status = "pending"'
-    params.push(req.user.id)
+    filteredPickups = pickups.filter(p => 
+      p.collectorId === req.user.id || 
+      (p.status === 'pending' && p.collectorId === null)
+    )
   }
-
-  query += ' ORDER BY pr.priority = "urgent" DESC, pr.priority = "high" DESC, pr.created_at DESC'
-
-  db.all(query, params, (err, pickups) => {
-    if (err) {
-      console.error('Get pickups error:', err)
-      return res.status(500).json({ success: false, message: 'Database error' })
+  
+  // Sort by priority and date
+  const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 }
+  filteredPickups.sort((a, b) => {
+    if (priorityOrder[a.priority] !== priorityOrder[b.priority]) {
+      return priorityOrder[a.priority] - priorityOrder[b.priority]
     }
-    res.json(pickups)
+    return new Date(b.createdAt) - new Date(a.createdAt)
   })
+  
+  res.json(filteredPickups)
 })
 
 // Get single pickup
 router.get('/:id', authenticate, (req, res) => {
   const { id } = req.params
-
-  db.get(
-    `SELECT pr.*, f.name as facility_name, u.name as user_name,
-      (SELECT name FROM users WHERE id = pa.collector_id) as collector_name,
-      pa.status as assignment_status, pa.notes as assignment_notes
-     FROM pickup_requests pr
-     LEFT JOIN facilities f ON pr.facility_id = f.id
-     LEFT JOIN users u ON pr.user_id = u.id
-     LEFT JOIN pickup_assignments pa ON pr.id = pa.pickup_request_id
-     WHERE pr.id = ?`,
-    [id],
-    (err, pickup) => {
-      if (err) {
-        console.error('Get pickup error:', err)
-        return res.status(500).json({ success: false, message: 'Database error' })
-      }
-
-      if (!pickup) {
-        return res.status(404).json({ success: false, message: 'Pickup not found' })
-      }
-
-      // Check permissions
-      if (req.user.role === 'staff' && req.user.facility_id !== pickup.facility_id) {
-        return res.status(403).json({ success: false, message: 'Access denied' })
-      }
-
-      res.json(pickup)
-    }
-  )
+  const pickup = pickups.find(p => p.id === parseInt(id))
+  
+  if (!pickup) {
+    return res.status(404).json({ success: false, message: 'Pickup not found' })
+  }
+  
+  if (req.user.role === 'staff' && pickup.facilityId !== req.user.facility_id) {
+    return res.status(403).json({ success: false, message: 'Access denied' })
+  }
+  
+  res.json(pickup)
 })
 
 // Create pickup request
 router.post('/', authenticate, authorize('staff', 'admin'), (req, res) => {
   const { priority, pickupDate, pickupTime, address, instructions, wasteRecordId } = req.body
-
+  
   if (!priority || !pickupDate || !pickupTime || !address) {
     return res.status(400).json({
       success: false,
       message: 'Priority, date, time, and address are required'
     })
   }
-
-  const facilityId = req.user.role === 'staff' ? req.user.facility_id : req.body.facility_id
-
-  if (!facilityId) {
-    return res.status(400).json({
-      success: false,
-      message: 'Facility ID is required'
-    })
-  }
-
-  db.run(
-    `INSERT INTO pickup_requests 
-     (facility_id, user_id, waste_record_id, priority, status, pickup_date, pickup_time, address, instructions)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [facilityId, req.user.id, wasteRecordId || null, priority, 'pending', pickupDate, pickupTime, address, instructions || null],
-    function(err) {
-      if (err) {
-        console.error('Create pickup error:', err)
-        return res.status(500).json({ success: false, message: 'Database error' })
-      }
-
-      const pickupId = this.lastID
-
-      // Create notification for admin
-      db.run(
-        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-        [1, 'New Pickup Request', `Pickup request #${pickupId} created from facility ID ${facilityId}`, 'info']
-      )
-
-      res.status(201).json({
-        success: true,
-        message: 'Pickup request created successfully',
-        pickup: { id: pickupId }
-      })
-    }
-  )
-})
-
-// Update pickup
-router.put('/:id', authenticate, (req, res) => {
-  const { id } = req.params
-  const updates = req.body
-
-  const fields = []
-  const values = []
-
-  const allowedFields = ['priority', 'status', 'pickup_date', 'pickup_time', 'address', 'instructions']
   
-  for (const field of allowedFields) {
-    if (updates[field] !== undefined) {
-      fields.push(`${field} = ?`)
-      values.push(updates[field])
-    }
+  // Get facility name
+  let facilityName = 'Your Facility'
+  // In a real app, you'd fetch from database
+  if (req.user.facility_id === 1) facilityName = 'City Hospital'
+  else if (req.user.facility_id === 2) facilityName = 'Apollo Clinic'
+  else if (req.user.facility_id === 3) facilityName = 'MediLab Research'
+  else if (req.user.facility_id === 4) facilityName = 'Sunrise Hospital'
+  else if (req.user.facility_id === 5) facilityName = 'Health Plus Clinic'
+  
+  const newPickup = {
+    id: nextId++,
+    facility: facilityName,
+    facilityId: req.user.facility_id || 1,
+    priority: priority,
+    status: 'pending',
+    pickupDate: pickupDate,
+    pickupTime: pickupTime,
+    address: address,
+    instructions: instructions || '',
+    wasteType: 'Mixed',
+    quantity: '0 kg',
+    collector: null,
+    collectorId: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    wasteRecords: []
   }
-
-  if (fields.length === 0) {
-    return res.status(400).json({ success: false, message: 'No fields to update' })
-  }
-
-  fields.push('updated_at = CURRENT_TIMESTAMP')
-  values.push(id)
-
-  const query = `UPDATE pickup_requests SET ${fields.join(', ')} WHERE id = ?`
-
-  db.run(query, values, function(err) {
-    if (err) {
-      console.error('Update pickup error:', err)
-      return res.status(500).json({ success: false, message: 'Database error' })
-    }
-
-    if (this.changes === 0) {
-      return res.status(404).json({ success: false, message: 'Pickup not found' })
-    }
-
-    res.json({ success: true, message: 'Pickup updated successfully' })
+  
+  pickups.push(newPickup)
+  
+  res.status(201).json({
+    success: true,
+    message: 'Pickup request created successfully',
+    pickup: newPickup
   })
 })
 
@@ -164,111 +206,71 @@ router.put('/:id', authenticate, (req, res) => {
 router.put('/:id/status', authenticate, (req, res) => {
   const { id } = req.params
   const { status } = req.body
-
-  if (!status || !['pending', 'assigned', 'in_transit', 'collected', 'completed', 'cancelled'].includes(status)) {
+  
+  const validStatuses = ['pending', 'assigned', 'accepted', 'in_transit', 'collected', 'completed', 'cancelled']
+  
+  if (!status || !validStatuses.includes(status)) {
     return res.status(400).json({
       success: false,
       message: 'Invalid status'
     })
   }
-
-  db.run(
-    'UPDATE pickup_requests SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-    [status, id],
-    function(err) {
-      if (err) {
-        console.error('Update pickup status error:', err)
-        return res.status(500).json({ success: false, message: 'Database error' })
-      }
-
-      if (this.changes === 0) {
-        return res.status(404).json({ success: false, message: 'Pickup not found' })
-      }
-
-      // Create notification
-      db.run(
-        'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-        [req.user.id, 'Pickup Status Updated', `Pickup #${id} status changed to ${status}`, 'info']
-      )
-
-      res.json({ success: true, message: 'Pickup status updated successfully' })
-    }
-  )
+  
+  const pickup = pickups.find(p => p.id === parseInt(id))
+  
+  if (!pickup) {
+    return res.status(404).json({ success: false, message: 'Pickup not found' })
+  }
+  
+  // Staff can only update their own pickups
+  if (req.user.role === 'staff' && pickup.facilityId !== req.user.facility_id) {
+    return res.status(403).json({ success: false, message: 'Access denied' })
+  }
+  
+  pickup.status = status
+  pickup.updatedAt = new Date().toISOString()
+  
+  if (status === 'cancelled' && req.user.role === 'staff') {
+    // Staff can cancel pending pickups
+  }
+  
+  res.json({
+    success: true,
+    message: `Pickup status updated to ${status}`,
+    pickup: pickup
+  })
 })
 
-// Assign collector to pickup
-router.post('/:id/assign', authenticate, authorize('admin', 'collector'), (req, res) => {
+// Delete pickup (staff can only delete their own pending pickups)
+router.delete('/:id', authenticate, (req, res) => {
   const { id } = req.params
-  const { collectorId } = req.body
-
-  const assignedBy = req.user.id
-  const collector = req.user.role === 'collector' ? req.user.id : collectorId
-
-  if (!collector) {
-    return res.status(400).json({
-      success: false,
-      message: 'Collector ID is required'
-    })
+  
+  const index = pickups.findIndex(p => p.id === parseInt(id))
+  
+  if (index === -1) {
+    return res.status(404).json({ success: false, message: 'Pickup not found' })
   }
-
-  // Check if pickup exists
-  db.get('SELECT * FROM pickup_requests WHERE id = ?', [id], (err, pickup) => {
-    if (err) {
-      console.error('Get pickup error:', err)
-      return res.status(500).json({ success: false, message: 'Database error' })
+  
+  const pickup = pickups[index]
+  
+  // Staff can only delete their own pending pickups
+  if (req.user.role === 'staff') {
+    if (pickup.facilityId !== req.user.facility_id) {
+      return res.status(403).json({ success: false, message: 'Access denied' })
     }
-
-    if (!pickup) {
-      return res.status(404).json({ success: false, message: 'Pickup not found' })
+    if (pickup.status !== 'pending' && pickup.status !== 'cancelled') {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Cannot delete pickup that is already in progress' 
+      })
     }
-
-    // Check if already assigned
-    db.get(
-      'SELECT * FROM pickup_assignments WHERE pickup_request_id = ?',
-      [id],
-      (err, existing) => {
-        if (err) {
-          console.error('Check assignment error:', err)
-          return res.status(500).json({ success: false, message: 'Database error' })
-        }
-
-        if (existing) {
-          return res.status(400).json({ success: false, message: 'Pickup already assigned' })
-        }
-
-        // Create assignment
-        db.run(
-          `INSERT INTO pickup_assignments 
-           (pickup_request_id, collector_id, assigned_by, status)
-           VALUES (?, ?, ?, ?)`,
-          [id, collector, assignedBy, 'assigned'],
-          function(err) {
-            if (err) {
-              console.error('Assign pickup error:', err)
-              return res.status(500).json({ success: false, message: 'Database error' })
-            }
-
-            // Update pickup status
-            db.run(
-              'UPDATE pickup_requests SET status = "assigned", updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-              [id]
-            )
-
-            // Create notification for collector
-            db.run(
-              'INSERT INTO notifications (user_id, title, message, type) VALUES (?, ?, ?, ?)',
-              [collector, 'New Pickup Assignment', `You have been assigned pickup #${id}`, 'info']
-            )
-
-            res.json({
-              success: true,
-              message: 'Pickup assigned successfully',
-              assignment: { id: this.lastID }
-            })
-          }
-        )
-      }
-    )
+  }
+  
+  pickups.splice(index, 1)
+  
+  res.json({
+    success: true,
+    message: 'Pickup deleted successfully'
   })
 })
 
