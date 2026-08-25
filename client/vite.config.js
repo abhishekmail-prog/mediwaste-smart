@@ -5,18 +5,17 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    strictPort: true,
     host: '0.0.0.0',
     proxy: {
       '/api': {
         target: 'http://localhost:5000',
         changeOrigin: true
-      },
-      '/ollama': {
-        target: 'http://localhost:11434',
-        changeOrigin: true,
-        rewrite: (path) => path.replace(/^\/ollama/, '')
       }
     }
+  },
+  build: {
+    outDir: 'dist',
+    sourcemap: false,
+    minify: false // Disable minification to avoid terser
   }
 })
