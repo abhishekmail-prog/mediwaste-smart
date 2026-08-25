@@ -1,0 +1,91 @@
+mediwaste-smart/
+│
+├── client/                          # React frontend
+│   ├── index.html                   # Entry HTML
+│   ├── vite.config.js               # Vite configuration
+│   ├── tailwind.config.js           # Tailwind config
+│   ├── postcss.config.js            # PostCSS config
+│   ├── package.json                 # Frontend dependencies
+│   ├── public/                      # Static assets
+│   │   └── favicon.ico
+│   └── src/                         # Source code
+│       ├── main.jsx                 # Entry point
+│       ├── App.jsx                  # Main app component
+│       ├── index.css                # Global styles
+│       ├── components/              # Reusable components
+│       │   ├── Layout.jsx           # Main layout with sidebar
+│       │   ├── ProtectedRoute.jsx   # Auth guard
+│       │   ├── NotificationBell.jsx # Notifications
+│       │   ├── StatusBadge.jsx      # Status indicators
+│       │   └── ChartCard.jsx        # Chart wrapper
+│       ├── pages/                   # Page components
+│       │   ├── Login.jsx            # Login page
+│       │   ├── Dashboard.jsx        # Role-based dashboard
+│       │   ├── StaffDashboard.jsx   # Hospital staff dashboard
+│       │   ├── AdminDashboard.jsx   # Admin dashboard
+│       │   ├── CollectorDashboard.jsx # Collector dashboard
+│       │   ├── WasteEntry.jsx       # Waste entry form
+│       │   ├── AIClassification.jsx # AI classification page
+│       │   ├── Pickups.jsx          # Pickup management
+│       │   ├── History.jsx          # Waste history
+│       │   ├── Analytics.jsx        # Analytics charts
+│       │   └── Notifications.jsx    # Notification center
+│       ├── services/                # API services
+│       │   ├── api.js               # Axios configuration
+│       │   ├── authService.js       # Auth API calls
+│       │   ├── wasteService.js      # Waste API calls
+│       │   ├── pickupService.js     # Pickup API calls
+│       │   └── aiService.js         # AI API calls
+│       ├── context/                 # React context
+│       │   └── AuthContext.jsx      # Authentication context
+│       ├── hooks/                   # Custom hooks
+│       │   └── useAuth.js           # Auth hook
+│       ├── utils/                   # Utilities
+│       │   └── constants.js         # Constants, categories
+│       └── assets/                  # Images, icons
+│
+├── server/                          # Node.js backend
+│   ├── package.json                 # Backend dependencies
+│   ├── server.js                    # Entry point
+│   ├── .env                         # Environment variables
+│   ├── config/                      # Configuration
+│   │   ├── database.js              # Database connection
+│   │   └── auth.js                  # JWT config
+│   ├── models/                      # Database models
+│   │   ├── User.js                  # User model
+│   │   ├── Facility.js              # Facility model
+│   │   ├── WasteRecord.js           # Waste record model
+│   │   ├── PickupRequest.js         # Pickup request model
+│   │   ├── PickupAssignment.js      # Pickup assignment model
+│   │   └── Notification.js          # Notification model
+│   ├── routes/                      # API routes
+│   │   ├── authRoutes.js            # Authentication routes
+│   │   ├── dashboardRoutes.js       # Dashboard routes
+│   │   ├── wasteRoutes.js           # Waste management routes
+│   │   ├── pickupRoutes.js          # Pickup management routes
+│   │   ├── aiRoutes.js              # AI classification routes
+│   │   ├── analyticsRoutes.js       # Analytics routes
+│   │   └── notificationRoutes.js    # Notification routes
+│   ├── controllers/                 # Request handlers
+│   │   ├── authController.js
+│   │   ├── dashboardController.js
+│   │   ├── wasteController.js
+│   │   ├── pickupController.js
+│   │   ├── aiController.js
+│   │   ├── analyticsController.js
+│   │   └── notificationController.js
+│   ├── middleware/                  # Middleware
+│   │   ├── auth.js                  # JWT authentication
+│   │   └── errorHandler.js          # Error handling
+│   ├── services/                    # Business logic
+│   │   ├── aiService.js             # AI classification logic
+│   │   └── notificationService.js   # Notification logic
+│   ├── database/                    # Database files
+│   │   └── mediwaste.db             # SQLite database
+│   ├── seeds/                       # Seed data
+│   │   └── seed.js                  # Database seeder
+│   └── migrations/                  # Migrations
+│       └── init.sql                 # Initial schema
+│
+├── README.md                        # Project documentation
+└── .gitignore                       # Git ignore file
