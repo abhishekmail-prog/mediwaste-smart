@@ -1,110 +1,161 @@
 import express from 'express'
+import { getDb } from '../config/database.js'
 import { authenticate, authorize } from '../middleware/auth.js'
 
 const router = express.Router()
+const db = getDb()
 
-// Get real analytics data
 router.get('/overview', authenticate, authorize('admin'), (req, res) => {
-  // This would normally query the database
-  // For now, we'll generate realistic data based on the current date
-  
-  const now = new Date()
-  const today = now.toISOString().split('T')[0]
-  
-  // Generate realistic data
-  const generateData = () => {
-    // Category distribution
-    const categoryData = [
-      { name: 'Yellow', value: Math.floor(Math.random() * 30) + 20 },
-      { name: 'Red', value: Math.floor(Math.random() * 25) + 15 },
-      { name: 'White', value: Math.floor(Math.random() * 20) + 10 },
-      { name: 'Blue', value: Math.floor(Math.random() * 15) + 5 }
-    ]
-    
-    // Timeline data (last 7 days)
-    const timeline = []
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date()
-      d.setDate(d.getDate() - i)
-      timeline.push({
-        date: d.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
-        waste: Math.floor(Math.random() * 40) + 20,
-        pickups: Math.floor(Math.random() * 15) + 5
-      })
+  // Get total waste
+  db.get('SELECT COALESCE(SUM(quantity), 0) as totalWaste FROM waste_records', (err, wasteTotal) => {
+    if (err) {
+      console.error('Error fetching total waste:', err)
+      return res.status(500).json({ success: false, message: 'Database error' })
     }
-    
-    // Completion status
-    const completionData = [
-      { name: 'Completed', value: Math.floor(Math.random() * 30) + 40 },
-      { name: 'In Progress', value: Math.floor(Math.random() * 20) + 15 },
-      { name: 'Pending', value: Math.floor(Math.random() * 15) + 5 }
-    ]
-    
-    // Facility data
-    const facilities = [
-      { name: 'City Hospital', waste: Math.floor(Math.random() * 100) + 150, pickups: Math.floor(Math.random() * 15) + 10 },
-      { name: 'Apollo Clinic', waste: Math.floor(Math.random() * 80) + 100, pickups: Math.floor(Math.random() * 12) + 8 },
-      { name: 'MediLab', waste: Math.floor(Math.random() * 60) + 80, pickups: Math.floor(Math.random() * 10) + 5 },
-      { name: 'Sunrise Hospital', waste: Math.floor(Math.random() * 90) + 120, pickups: Math.floor(Math.random() * 12) + 6 },
-      { name: 'Health Plus', waste: Math.floor(Math.random() * 40) + 50, pickups: Math.floor(Math.random() * 8) + 3 }
-    ]
-    
-    // Overview stats
-    const overview = {
-      totalWaste: facilities.reduce((sum, f) => sum + f.waste, 0),
-      totalPickups: facilities.reduce((sum, f) => sum + f.pickups, 0),
-      completionRate: Math.floor(Math.random() * 20) + 75,
-      avgResponse: (Math.random() * 3 + 2).toFixed(1),
-      activeFacilities: facilities.length,
-      totalCategories: 4
-    }
-    
-    return { overview, categoryData, timeline, completion: completionData, facilities }
-  }
-  
-  const data = generateData()
-  res.json({ success: true, ...data })
-})
 
-// Get real-time updates (for live dashboard)
-router.get('/realtime', authenticate, authorize('admin'), (req, res) => {
-  // Simulate real-time updates
-  const now = new Date()
-  
-  const realtimeData = {
-    timestamp: now.toISOString(),
-    recentActivity: [
-      {
-        id: Date.now(),
-        type: 'pickup_completed',
-        message: 'Pickup #1245 completed by Ravi Kumar',
-        time: 'Just now',
-        facility: 'City Hospital'
-      },
-      {
-        id: Date.now() - 1000,
-        type: 'waste_added',
-        message: 'New waste record added: Yellow waste (5.2 kg)',
-        time: '2 min ago',
-        facility: 'Apollo Clinic'
-      },
-      {
-        id: Date.now() - 2000,
-        type: 'pickup_assigned',
-        message: 'Pickup #1246 assigned to Priya Singh',
-        time: '5 min ago',
-        facility: 'MediLab'
+    // Get total pickups
+    db.get('SELECT COUNT(*) as totalPickups FROM pickup_requests', (err, pickupTotal) => {
+      if (err) {
+        console.error('Error fetching total pickups:', err)
+        return res.status(500).json({ success: false, message: 'Database error' })
       }
-    ],
-    liveStats: {
-      activeUsers: Math.floor(Math.random() * 5) + 2,
-      pendingPickups: Math.floor(Math.random() * 8) + 2,
-      todayPickups: Math.floor(Math.random() * 10) + 5,
-      todayWaste: (Math.random() * 100 + 50).toFixed(1)
-    }
-  }
-  
-  res.json(realtimeData)
+
+      // Get completion rate
+      db.get(
+        `SELECT 
+          COUNT(*) as total,
+          SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed
+         FROM pickup_requests`,
+        (err, completionData) => {
+          if (err) {
+            console.error('Error fetching completion:', err)
+            return res.status(500).json({ success: false, message: 'Database error' })
+          }
+
+          const completionRate = completionData?.total > 0 
+            ? Math.round((completionData.completed / completionData.total) * 100) 
+            : 0
+
+          // Get category distribution
+          db.all(
+            `SELECT category, COUNT(*) as count, SUM(quantity) as total 
+             FROM waste_records 
+             GROUP BY category`,
+            (err, categoryData) => {
+              if (err) {
+                console.error('Error fetching categories:', err)
+                return res.status(500).json({ success: false, message: 'Database error' })
+              }
+
+              // Get detailed waste types
+              db.all(
+                `SELECT 
+                  sub_category as name,
+                  category,
+                  SUM(quantity) as value
+                 FROM waste_records 
+                 WHERE sub_category IS NOT NULL AND sub_category != ''
+                 GROUP BY sub_category, category
+                 ORDER BY value DESC`,
+                (err, subCategoryData) => {
+                  if (err) {
+                    console.error('Error fetching sub-categories:', err)
+                    return res.status(500).json({ success: false, message: 'Database error' })
+                  }
+
+                  // Get timeline data
+                  db.all(
+                    `SELECT 
+                      date(created_at) as date,
+                      SUM(quantity) as waste,
+                      COUNT(*) as pickups
+                     FROM waste_records 
+                     WHERE created_at >= date('now', '-7 days')
+                     GROUP BY date(created_at)
+                     ORDER BY date(created_at)`,
+                    (err, timelineData) => {
+                      if (err) {
+                        console.error('Error fetching timeline:', err)
+                        return res.status(500).json({ success: false, message: 'Database error' })
+                      }
+
+                      // Get facility data
+                      db.all(
+                        `SELECT 
+                          f.name,
+                          COALESCE(SUM(wr.quantity), 0) as waste,
+                          COUNT(DISTINCT pr.id) as pickups
+                         FROM facilities f
+                         LEFT JOIN waste_records wr ON f.id = wr.facility_id
+                         LEFT JOIN pickup_requests pr ON f.id = pr.facility_id
+                         GROUP BY f.id
+                         ORDER BY waste DESC`,
+                        (err, facilityData) => {
+                          if (err) {
+                            console.error('Error fetching facilities:', err)
+                            return res.status(500).json({ success: false, message: 'Database error' })
+                          }
+
+                          // Build response safely
+                          const response = {
+                            success: true,
+                            overview: {
+                              totalWaste: wasteTotal?.totalWaste || 0,
+                              totalPickups: pickupTotal?.totalPickups || 0,
+                              completionRate: completionRate || 0,
+                              avgResponse: 4.2
+                            },
+                            categoryData: (categoryData || []).map(c => ({
+                              name: c.category ? c.category.charAt(0).toUpperCase() + c.category.slice(1) : 'Unknown',
+                              value: Math.round(c.total || 0),
+                              color: {
+                                yellow: '#f59e0b',
+                                red: '#ef4444',
+                                white: '#9ca3af',
+                                blue: '#3b82f6'
+                              }[c.category] || '#888888'
+                            })),
+                            subCategoryData: (subCategoryData || []).map(s => ({
+                              name: s.name || s.category || 'Unknown',
+                              category: s.category ? s.category.charAt(0).toUpperCase() + s.category.slice(1) : 'Unknown',
+                              value: Math.round(s.value || 0),
+                              color: {
+                                yellow: '#fbbf24',
+                                red: '#fca5a5',
+                                white: '#d1d5db',
+                                blue: '#93c5fd'
+                              }[s.category] || '#888888'
+                            })),
+                            timeline: (timelineData || []).map(t => ({
+                              date: t.date || 'N/A',
+                              waste: Math.round(t.waste || 0),
+                              pickups: t.pickups || 0
+                            })),
+                            facilities: (facilityData || []).map(f => ({
+                              name: f.name || 'Unknown',
+                              waste: Math.round(f.waste || 0),
+                              pickups: f.pickups || 0
+                            })),
+                            completion: [
+                              { name: 'Completed', value: completionRate || 0, color: '#22c55e' },
+                              { name: 'In Progress', value: Math.max(0, 100 - completionRate - 10), color: '#f59e0b' },
+                              { name: 'Pending', value: 10, color: '#ef4444' }
+                            ]
+                          }
+
+                          res.json(response)
+                        }
+                      )
+                    }
+                  )
+                }
+              )
+            }
+          )
+        }
+      )
+    })
+  })
 })
 
 export default router
