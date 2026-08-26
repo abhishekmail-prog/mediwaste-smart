@@ -5,7 +5,7 @@ const router = express.Router()
 const db = getDb()
 
 // Seed demo data
-router.get('/seed', (req, res) => {
+router.get('/', (req, res) => {
   const wasteItems = [
     { category: 'yellow', subCategory: '🩸 Blood Bags', quantity: 5.2 },
     { category: 'yellow', subCategory: '🧬 Tissue Samples', quantity: 3.8 },
@@ -22,6 +22,7 @@ router.get('/seed', (req, res) => {
   ]
 
   let inserted = 0
+  let errors = 0
 
   wasteItems.forEach((item) => {
     db.run(
@@ -31,6 +32,7 @@ router.get('/seed', (req, res) => {
       [1, 2, item.category, item.subCategory, item.quantity, 'kg', 'completed'],
       function(err) {
         if (err) {
+          errors++
           console.error('Error inserting:', err)
         } else {
           inserted++
@@ -42,7 +44,7 @@ router.get('/seed', (req, res) => {
   setTimeout(() => {
     res.json({ 
       success: true, 
-      message: `Seeded ${inserted} waste records` 
+      message: `Seeded ${inserted} waste records (${errors} errors)`
     })
   }, 2000)
 })
