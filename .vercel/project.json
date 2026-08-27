@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_uTR5hBVpTl8jGW1fZUas0H8MIrUQ",
+  "orgId": "team_ubxwqsT9cuuW3XwA2XfndFpS",
+  "projectName": "mediwaste-smart",
+  "settings": {
+    "createdAt": 1787676664362,
+    "framework": "vite",
+    "devCommand": "vite --port $PORT",
+    "installCommand": "cd client && npm install",
+    "buildCommand": "cd client && npm run build",
+    "outputDirectory": "client/dist",
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_uTR5hBVpTl8jGW1fZUas0H8MIrUQ",
+      "name": "mediwaste-smart",
+      "directory": ".",
+      "orgId": "team_ubxwqsT9cuuW3XwA2XfndFpS"
+    }
+  ]
+}
